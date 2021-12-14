@@ -1,0 +1,157 @@
+# **Course Project I**
+
+===================
+
+## Loading the data
+
+```{r, echo = TRUE}
+data <- read.csv("C:/Users/ddelp/OneDrive/Escritorio/activity.csv")
+```
+
+
+## Exploring the data
+
+```{r, echo = TRUE}
+str(data)
+summary(data)
+```
+
+
+## Total number of steps taken each day
+
+We remove missing values first and then get the number of steps taken each day, mean and median
+
+```{r, echo = TRUE}
+library(dplyr)
+data1 <- data[complete.cases(data), ]
+results1 <- group_by(data1, date) %>% 
+  summarise(total = sum(steps), mean = mean(steps), median = median(steps))
+print (results1, n = 53)
+```
+
+
+## Mean and median total number of steps taken per day
+
+```{r, echo = TRUE}
+mean(results1$total)
+median(results1$total)
+```
+
+
+## Histogram of the total number of steps taken each day
+
+```{r histogram1, echo = TRUE}
+hist(results1$total, col = "skyblue", breaks = 20, main = "Total number of steps taken each day",
+     xlab = "Steps")
+```
+
+
+## Time series plot of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+
+```{r, echo = TRUE}
+av_interval <- group_by(data1, interval) %>%
+  summarise(mean_steps = mean(steps))
+av_interval <- as.data.frame(av_interval)
+```
+
+First we group the data frame by interval and take the mean of "steps" variable.
+
+```{r, echo=TRUE}
+library(ggplot2)
+plot1 <- ggplot(av_interval, aes(x = interval, y = mean_steps))
+plot1 + geom_line(colour = "salmon2", size = 1) + labs (x = "5-min interval", 
+                                                        y = "Average number of steps") +
+  ggtitle("Time series plot: average number of steps across days")
+
+```
+
+
+## The 5-minute interval that, on average, contains the maximum number of steps
+
+We use the data frame grouped by interval, then reorder our data so that the maximum value is first so we can select it.
+
+```{r, echo = TRUE}
+max_interval <- av_interval %>%
+  arrange(desc(mean_steps)) %>%
+  top_n(1) %>%
+  select(interval)
+
+print(max_interval)
+```
+
+
+## Code to describe and show a strategy for imputing missing data
+
+
+### Total number of missing values in the data set
+```{r, echo = TRUE}
+summary(data)
+sum(is.na(data$date))
+sum(is.na(data$interval))
+sum(is.na(data$steps))
+```
+There are 2304 NA values and only in variable "steps".
+
+### Devise a strategy for filling in all of the missing values in the dataset. 
+We are going to replace missing values of variable "steps" with the calculated mean by interval, in the data frame without missing values.
+We will call this variable "steps_hat"
+
+```{r, echo = TRUE}
+imput_steps = group_by(data1, interval) %>%
+  summarise(steps_hat = mean(steps))
+imput_steps = as.data.frame(imput_steps)
+```
+
+
+### Create a new dataset that is equal to the original dataset but with the missing data filled in.
+We merge our original data frame with the "steps_hat" variable and for those cases where there is a missing value, the variable "steps" will be substituted by the value of "steps_hat" (our imputed mean).
+
+```{r, echo = TRUE}
+data2 = left_join(data, imput_steps, by = "interval")
+data2$steps_final = ifelse(is.na(data2$steps) == TRUE,
+                           round(data2$steps_hat), 
+                           data2$steps)
+head(data2)
+sum(is.na(data2$steps_final))
+```
+We check that there are no missing values.
+
+
+### Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day.
+
+```{r histogram2, echo=TRUE}
+results2 <- group_by(data2, date) %>%
+  summarise(total2 = sum(steps_final))
+hist(results2$total2, col = "cyan", breaks = 20, main = "Total number of steps taken each day",
+     xlab = "Steps")
+mean(results2$total2)
+median(results2$total2)
+```
+The mean is the same as the mean from the first part of the assignment, and the median did not change much. Given that a lot of values are replaced with the mean, it makes sense that mean and median are similar. 
+
+## Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends
+
+### First create the factor variable weekend.
+
+```{r, echo=TRUE}
+data2$date = as.Date(data2$date)
+data2$weekend = weekdays(data2$date)
+table(data2$weekend)
+
+data2$weekend = factor (ifelse(data2$weekend %in% c("sábado","domingo"), 1, 0),
+                        labels=c('Weekday', 'Weekend'))
+table(data2$weekend)
+```
+
+### Panel plot
+
+```{r panelplot, echo=TRUE}
+results3 <- data2 %>%
+  group_by(interval, weekend) %>%
+  summarise(mean3 = mean(steps_final))
+plot2 <- ggplot(results3, aes(interval, mean3))
+plot2 + geom_line(colour = "salmon2", size = 1) + facet_grid(weekend ~ .) + labs(x = "5-min interval",
+                                                                                 y = "Average number of steps") + ggtitle("Time series plot: Average number of steps taken, by weekend or weekday")
+```
+
+
